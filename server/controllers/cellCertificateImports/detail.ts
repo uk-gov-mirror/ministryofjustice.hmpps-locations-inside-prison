@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { CapacityCell, TypedLocals } from '../../@types/express'
 import paths from '../../utils/paths'
+import LocationsService from '../../services/locationsService'
 
 // Renders a "before -> after" string, handling 0 (a valid capacity) and missing previous values.
 export const changeText = (previous: number | undefined, current: number | undefined): string => {
@@ -70,6 +71,27 @@ const appliedCapacityCell = (
   text: changeText(previous, applied),
 })
 
+// Cells that had no row in the upload still went onto the certificate at their current values, so this
+// disclosure links through to each one rather than just naming it - a location that has since been
+// deleted or renamed is left without a link rather than failing the whole page.
+export const notOnCertificateRows = async (
+  locationsService: LocationsService,
+  systemToken: string,
+  locationsNotOnCertificate: Array<string | { locationKey: string }> | undefined,
+): Promise<{ locationKey: string; url?: string }[]> =>
+  Promise.all(
+    (locationsNotOnCertificate || []).map(async location => {
+      const locationKey = typeof location === 'string' ? location : location.locationKey
+
+      try {
+        const resolvedLocation = await locationsService.getLocationByKey(systemToken, locationKey)
+        return { locationKey, url: paths.location.view(resolvedLocation) }
+      } catch {
+        return { locationKey }
+      }
+    }),
+  )
+
 export default async (req: Request, res: Response) => {
   const { locationsService } = req.services
   const { systemToken } = req.session
@@ -112,6 +134,11 @@ export default async (req: Request, res: Response) => {
       certificateImport.status === 'FINISHED' && certificateImport.cellCertificateId
         ? paths.cellCertificate.view(prisonId, certificateImport.cellCertificateId)
         : undefined,
+    notOnCertificateRows: await notOnCertificateRows(
+      locationsService,
+      systemToken,
+      certificateImport.locationsNotOnCertificate,
+    ),
   }
 
   const success = req.flash('success')

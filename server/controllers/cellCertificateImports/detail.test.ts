@@ -5,6 +5,7 @@ import importDetail, {
   changeText,
   heldAndCertifiedCell,
   maxCapacityCell,
+  notOnCertificateRows,
   workingCapacityCell,
 } from './detail'
 import LocationsService from '../../services/locationsService'
@@ -153,6 +154,30 @@ describe('Cell certificate imports - detail', () => {
     })
   })
 
+  describe('notOnCertificateRows', () => {
+    it('links each location key through to its location page', async () => {
+      locationsService.getLocationByKey = jest.fn().mockResolvedValue({ id: 'location-1', prisonId: 'TST' })
+
+      const rows = await notOnCertificateRows(locationsService, 'token', [{ locationKey: 'TST-A-1-003' }])
+
+      expect(locationsService.getLocationByKey).toHaveBeenCalledWith('token', 'TST-A-1-003')
+      expect(rows).toEqual([{ locationKey: 'TST-A-1-003', url: '/TST/location-1/view' }])
+    })
+
+    it('returns an empty list when there is nothing to report', async () => {
+      expect(await notOnCertificateRows(locationsService, 'token', undefined)).toEqual([])
+      expect(await notOnCertificateRows(locationsService, 'token', [])).toEqual([])
+    })
+
+    it('leaves a location without a link rather than failing when it cannot be found', async () => {
+      locationsService.getLocationByKey = jest.fn().mockRejectedValue(new Error('not found'))
+
+      const rows = await notOnCertificateRows(locationsService, 'token', [{ locationKey: 'TST-A-1-003' }])
+
+      expect(rows).toEqual([{ locationKey: 'TST-A-1-003' }])
+    })
+  })
+
   it('renders the detail page with summary, location rows and a cell certificate link when finished', async () => {
     locationsService.getCellCertificateImport = jest.fn().mockResolvedValue(certificateImport)
 
@@ -181,6 +206,25 @@ describe('Cell certificate imports - detail', () => {
             message: 'No changes required',
           }),
         ],
+      }),
+    )
+  })
+
+  it('resolves cells not on the uploaded certificate to their location page', async () => {
+    locationsService.getCellCertificateImport = jest.fn().mockResolvedValue({
+      ...certificateImport,
+      notOnCertificateRecords: 1,
+      locationsNotOnCertificate: [{ locationKey: 'TST-A-1-003' }],
+    })
+    locationsService.getLocationByKey = jest.fn().mockResolvedValue({ id: 'location-3', prisonId: 'TST' })
+
+    await importDetail(deepReq as Request, deepRes as Response)
+
+    expect(locationsService.getLocationByKey).toHaveBeenCalledWith('token', 'TST-A-1-003')
+    expect(deepRes.render).toHaveBeenCalledWith(
+      'pages/cellCertificateImports/detail',
+      expect.objectContaining({
+        notOnCertificateRows: [{ locationKey: 'TST-A-1-003', url: '/TST/location-3/view' }],
       }),
     )
   })

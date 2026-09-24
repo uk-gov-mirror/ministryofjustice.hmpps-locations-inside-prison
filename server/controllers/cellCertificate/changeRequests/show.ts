@@ -3,7 +3,7 @@ import { TypedLocals } from '../../../@types/express'
 import approvalTypeDescription from '../../../formatters/approvalTypeDescription'
 import populateCertificationRequestDetails from '../../../middleware/populateCertificationRequestDetails'
 import paths from '../../../utils/paths'
-import { capacityCell } from '../../cellCertificateImports/detail'
+import { capacityCell, notOnCertificateRows } from '../../cellCertificateImports/detail'
 import LocationsService from '../../../services/locationsService'
 
 /**
@@ -53,6 +53,11 @@ const importResults = async (
             location.certifiedNormalAccommodationMismatch,
           ),
         })),
+      notOnCertificateRows: await notOnCertificateRows(
+        locationsService,
+        systemToken,
+        certificateImport.locationsNotOnCertificate,
+      ),
     }
   } catch {
     return undefined
